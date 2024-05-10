@@ -4,6 +4,7 @@ import sys
 import signal
 from pick import pick
 import os
+import curses
 
 debug = 0
 # 执行终端命令
@@ -11,10 +12,10 @@ def sh_(cmd):
     try:
         p = subprocess.run(cmd, universal_newlines=True, check=False, shell=True,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        # print(p.stdout)
         return p.stdout
     except RuntimeError as e:
         print(f'Error: {e}')
+
 
 def run_command(command):
     process = subprocess.Popen(
@@ -43,7 +44,6 @@ def signal_handler(signal, frame):
 
 def get_device_hardware_information():
     device_model = sh_('cat /proc/device-tree/model')
-
     if device_model == None:
         device_model = None    
     elif "5A" in device_model:
@@ -54,13 +54,15 @@ def get_device_hardware_information():
         device_model = "3A"
     elif "4B" in device_model:
         device_model = "4B"
+    else:
+        return None
     return device_model
 
 def get_resolution(camera):
     if camera == 'imx519':
-        return ["4656x3496", "3840x2160", "1920x1080"]
+        return ["4656x3496", "3840x2160", "1920x1080", 'Exit']
     elif camera == 'arducam-pivariety':
-        return ["4056x3040", "3840x2160", "1920x1080"]
+        return ["4056x3040", "3840x2160", "1920x1080", 'Exit']
     else:
         return None
 
@@ -115,7 +117,6 @@ def install_dtbo(platform, camera):
     else:
         print("Sorry, your hardward cannot be supported.")
         sys.exit(0)
-        return 0
     
     if debug:
         print("Arducam_RK_driver dtbo file:")
@@ -144,6 +145,49 @@ def change_resolution(resolution):
     run_command("sudo /opt/arducam/camera_init.sh {} > logfile.log 2>&1 &".format(resolution))
     return 0
 
+def show_gui(stdscr, title, title_len, options):
+    # 清空屏幕
+    stdscr.clear()
+    
+    # 当前选中的选项索引
+    current_option = 0
+
+    # 设置颜色属性
+    curses.use_default_colors()
+    curses.init_pair(1, curses.COLOR_BLACK, -1)  # 选中选项的颜色
+
+    while True:
+        stdscr.clear()
+        # 显示菜单选项
+        for i, option in enumerate(options):
+            if i == current_option:
+                # 选中的选项前面加星号
+                stdscr.addstr(i + title_len, 1, "* " + option, curses.color_pair(1))
+            else:
+                stdscr.addstr(i + title_len, 1, "  " + option)
+
+        stdscr.addstr(0, 0, title, curses.A_BOLD)
+
+        # 刷新屏幕
+        stdscr.refresh()
+        curses.curs_set(0)
+
+        # 获取用户输入
+        key = stdscr.getch()
+
+        if key == curses.KEY_UP and current_option > 0:
+            # 上箭头键，向上移动选项
+            current_option -= 1
+        elif key == curses.KEY_DOWN and current_option < len(options) - 1:
+            # 下箭头键，向下移动选项
+            current_option += 1
+        elif key == curses.KEY_ENTER or key in [10, 13]:
+            # 回车键，选择当前选项
+            selected_option = options[current_option]
+            if selected_option == 'Exit':
+                sys.exit(0)
+            return selected_option
+
 if __name__ == '__main__':
 
     signal.signal(signal.SIGINT,signal_handler)
@@ -154,15 +198,12 @@ if __name__ == '__main__':
         print("The device cannot be recognized.")
         sys.exit(0)
 
-    options = ['imx519', 'arducam-pivariety']
     title = 'Machine model: Radxa ROCK {}\nPlease choose camera: '.format(device_model)
-    title_resolution = 'Please choose camera resolution: '
-    option = pick(options, title)[0][0]
-    camera_name = option
-
+    options = ['imx519', 'arducam-pivariety', 'Exit']
+    camera_name = curses.wrapper(show_gui, title, 2, options)
     options = get_resolution(camera_name)
-    option = pick(options, title_resolution)[0][0]
-    resolution = option
+    title_resolution = 'Please choose camera resolution: '
+    resolution = curses.wrapper(show_gui, title_resolution, 1, options)
 
     print('Machine model: Radxa ROCK {}\nChoose camera is: {}'.format(device_model, camera_name))
     print("Choose camera resolution is: {}".format(resolution))
