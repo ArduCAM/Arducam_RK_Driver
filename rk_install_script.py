@@ -162,7 +162,7 @@ def show_gui(stdscr, title, title_len, options):
         for i, option in enumerate(options):
             if i == current_option:
                 # 选中的选项前面加星号
-                stdscr.addstr(i + title_len, 1, "* " + option, curses.color_pair(1))
+                stdscr.addstr(i + title_len, 1, "* " + option)
             else:
                 stdscr.addstr(i + title_len, 1, "  " + option)
 
